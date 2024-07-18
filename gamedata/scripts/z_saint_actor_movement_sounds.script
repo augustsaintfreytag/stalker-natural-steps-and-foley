@@ -1,0 +1,186 @@
+-- Types
+
+local SOUND_KIND = {
+	NONE = "none",
+	FOLEY = "foley",
+	GRASS = "grass"
+}
+
+local MATERIAL_MAP = {
+	["wood"] = SOUND_KIND.NONE,
+	["earth"] = SOUND_KIND.NONE,
+	["bush"] = SOUND_KIND.GRASS,
+	["dirt"] = SOUND_KIND.NONE,
+	["metal"] = SOUND_KIND.NONE,
+	["water"] = SOUND_KIND.NONE,
+	["tin"] = SOUND_KIND.NONE,
+	["grass"] = SOUND_KIND.GRASS,
+	["gravel"] = SOUND_KIND.NONE,
+	["asphalt"] = SOUND_KIND.NONE,
+	["tile"] = SOUND_KIND.NONE,
+	["concrete"] = SOUND_KIND.NONE,
+	["shifer"] = SOUND_KIND.NONE,
+	["default"] = SOUND_KIND.NONE,
+}
+
+-- Config
+
+local config = {
+	movement_volume = 0.3,
+	movement_volume_jitter = 0.1,
+	movement_pitch_jitter = 0.1,
+
+	movement_crouching_volume_coeff = 0.8,
+	movement_crouching_pitch_coeff = 0.75,
+	movement_sprinting_volume_coeff = 1.2,
+	movement_sprinting_pitch_coeff = 1.35,
+
+	max_movement_sound_refs = 10,
+	sound_cooldown = 0 -- Actor sound stepping already paces playback.
+}
+
+-- State
+
+local sound_refs = {}
+local sound_ref_index = 0
+
+local sound_index_by_kind = {}
+
+local num_sounds_by_kind = {
+	[SOUND_KIND.FOLEY] = 27,
+	[SOUND_KIND.GRASS] = 15
+}
+
+local last_movement_sound = 0
+
+-- Ticking
+
+function tick_sound_index(kind)
+	local current_index = sound_index_by_kind[kind] or 0
+
+	if not num_sounds_by_kind[kind] then
+		return 1
+	end
+
+	local num_sounds = num_sounds_by_kind[kind]
+	sound_index_by_kind[kind] = current_index % num_sounds + 1
+
+	return sound_index_by_kind[kind]
+end
+
+function random_sound_index(kind)
+	if not num_sounds_by_kind[kind] then
+		return 1
+	end
+
+	return math.random(1, num_sounds_by_kind[kind])
+end
+
+function has_sound_for_material(material)
+	return num_sounds_by_kind[material] ~= nil
+end
+
+-- Cycle
+
+function on_movement(material_id, power, hud_view, flags)
+	if time_global() < last_movement_sound + config.sound_cooldown then
+		printf("Skipping natural movement sound, cooldown not elapsed, " .. (
+			config.sound_cooldown - (time_global() - last_movement_sound)
+		) .. "ms remaining.")
+		return
+	end
+
+	-- Foley Sound
+
+	local foley_sound_index = tick_sound_index(SOUND_KIND.FOLEY)
+	play_sound(actor, SOUND_KIND.FOLEY, foley_sound_index)
+
+	-- Material Sound
+
+	local material = sound_material_from_id(material_id)
+
+	if material == SOUND_KIND.NONE or not has_sound_for_material(material) then
+		printf("No natural movement sound for material '" .. (material or "(None)") .. "' (id '" .. material_id .. "').")
+		return
+	end
+
+	local material_sound_index = tick_sound_index(material)
+	play_sound(actor, material, material_sound_index)
+
+	printf("Playing natural movement sound for material '" ..
+		material .. "' (id '" .. material_id .. "'), index " .. material_sound_index .. ".")
+end
+
+-- Materials
+
+function sound_material_from_id(material_id)
+	for key, value in pairs(MATERIAL_MAP) do
+		if string.find(material_id, key) then
+			return value
+		end
+	end
+
+	return SOUND_KIND.NONE
+end
+
+-- Actor State
+
+function actor_is_crouching()
+	return IsMoveState("mcCrouch")
+end
+
+function actor_is_sprinting()
+	return IsMoveState("mcSprint")
+end
+
+-- Sound Playback
+
+function play_sound(actor, kind, index)
+	local sound_path = "material\\actor\\step\\" .. kind .. "_a_" .. index
+
+	local sound_ref = get_sound_ref(sound_path)
+	sound_ref:play(actor, 0, sound_object.s2d)
+
+	sound_ref.volume = sound_volume()
+	sound_ref.frequency = sound_frequency()
+
+	last_movement_sound = time_global()
+end
+
+function sound_volume()
+	local jitter = random_float(-config.movement_volume_jitter, config.movement_volume_jitter)
+	local volume = config.movement_volume + jitter
+
+	if actor_is_crouching then
+		volume = volume * config.movement_crouching_volume_coeff
+	elseif actor_is_sprinting then
+		volume = volume * config.movement_sprinting_volume_coeff
+	end
+
+	return volume
+end
+
+function sound_frequency()
+	local jitter = 1 + random_float(-config.movement_pitch_jitter, config.movement_pitch_jitter)
+
+	if actor_is_sprinting() then
+		jitter = jitter * config.movement_sprinting_pitch_coeff
+	elseif actor_is_crouching() then
+		jitter = jitter * config.movement_crouching_pitch_coeff
+	end
+
+	return jitter
+end
+
+function get_sound_ref(sound_file)
+	sound_ref_index = (sound_ref_index + 1) % config.max_movement_sound_refs
+	sound_refs[sound_ref_index] = sound_object(sound_file)
+
+	return sound_refs[sound_ref_index]
+end
+
+-- Hooks
+
+function on_game_start()
+	RegisterScriptCallback("actor_on_footstep", on_movement)
+end
