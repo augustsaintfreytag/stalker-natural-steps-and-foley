@@ -84,7 +84,7 @@ end
 
 function on_movement(material_id, power, hud_view, flags)
 	if time_global() < last_movement_sound + config.sound_cooldown then
-		printf("Skipping natural movement sound, cooldown not elapsed, " .. (
+		log("Skipping natural movement sound, cooldown not elapsed, " .. (
 			config.sound_cooldown - (time_global() - last_movement_sound)
 		) .. "ms remaining.")
 		return
@@ -100,14 +100,14 @@ function on_movement(material_id, power, hud_view, flags)
 	local material = sound_material_from_id(material_id)
 
 	if material == SOUND_KIND.NONE or not has_sound_for_material(material) then
-		printf("No natural movement sound for material '" .. (material or "(None)") .. "' (id '" .. material_id .. "').")
+		log("No natural movement sound for material '" .. (material or "(None)") .. "' (id '" .. material_id .. "').")
 		return
 	end
 
 	local material_sound_index = tick_sound_index(material)
 	play_sound(actor, material, material_sound_index)
 
-	printf("Playing natural movement sound for material '" ..
+	log("Playing natural movement sound for material '" ..
 		material .. "' (id '" .. material_id .. "'), index " .. material_sound_index .. ".")
 end
 
@@ -177,6 +177,12 @@ function get_sound_ref(sound_file)
 	sound_refs[sound_ref_index] = sound_object(sound_file)
 
 	return sound_refs[sound_ref_index]
+end
+
+-- Utility
+
+function log(message)
+	-- printf("SNMS: " .. message)
 end
 
 -- Hooks
