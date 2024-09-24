@@ -8,7 +8,7 @@ local SOUND_KIND = {
 
 local MATERIAL_MAP = {
 	["wood"] = SOUND_KIND.NONE,
-	["earth"] = SOUND_KIND.NONE,
+	["earth"] = SOUND_KIND.GRASS,
 	["bush"] = SOUND_KIND.GRASS,
 	["dirt"] = SOUND_KIND.NONE,
 	["metal"] = SOUND_KIND.NONE,
