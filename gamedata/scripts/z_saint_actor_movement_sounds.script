@@ -55,7 +55,11 @@ local config = {
 	movement_sprinting_volume_coeff = 1.5,
 	movement_sprinting_pitch_coeff = 1.3,
 
-	max_movement_sound_refs = 10,
+	movement_gear_sound_chance = 1.0,
+	movement_gear_volume_coeff = 1.0,
+	movement_gear_sprinting_volume_coeff = 1.5,
+
+	max_movement_sound_refs = 12,
 	sound_cooldown = 0 -- Actor sound stepping already paces playback.
 }
 
@@ -68,10 +72,14 @@ local sound_index_by_kind = {}
 
 local num_sounds_by_kind = {
 	[SOUND_KIND.FOLEY] = 27,
-	[SOUND_KIND.GRASS] = 15
+	[SOUND_KIND.GRASS] = 15,
+	[GEAR_SOUND_KIND.MELEE] = 6,
+	[GEAR_SOUND_KIND.LIGHT] = 6,
+	[GEAR_SOUND_KIND.MEDIUM] = 6,
+	[GEAR_SOUND_KIND.HEAVY] = 6
 }
 
-local last_movement_sound = 0
+local last_step_sound = 0
 
 -- Ticking
 
@@ -100,12 +108,16 @@ function has_sound_for_material(material)
 	return num_sounds_by_kind[material] ~= nil
 end
 
+function has_sound_for_gear(kind)
+	return num_sounds_by_kind[kind] ~= nil
+end
+
 -- Cycle
 
 function on_movement(material_id, power, hud_view, flags)
-	if time_global() < last_movement_sound + config.sound_cooldown then
+	if time_global() < last_step_sound + config.sound_cooldown then
 		log("Skipping natural movement sound, cooldown not elapsed, " .. (
-			config.sound_cooldown - (time_global() - last_movement_sound)
+			config.sound_cooldown - (time_global() - last_step_sound)
 		) .. "ms remaining.")
 		return
 	end
@@ -113,7 +125,23 @@ function on_movement(material_id, power, hud_view, flags)
 	-- Foley Sound
 
 	local foley_sound_index = tick_sound_index(SOUND_KIND.FOLEY)
-	play_sound(actor, SOUND_KIND.FOLEY, foley_sound_index)
+	log("Playing foley sound, index " .. foley_sound_index .. ".")
+	play_step_sound(actor, SOUND_KIND.FOLEY, foley_sound_index)
+
+	-- Gear Sound
+
+	if math.random() < config.movement_gear_sound_chance then
+		local gear_sound_kind = sound_kind_for_active_gear()
+
+		if gear_sound_kind ~= nil and has_sound_for_gear(gear_sound_kind) then
+			local gear_sound_index = tick_sound_index(gear_sound_kind)
+
+			log("Playing gear sound for kind '" .. gear_sound_kind .. "', index " .. gear_sound_index .. ".")
+			play_gear_sound(actor, gear_sound_kind, gear_sound_index)
+		else
+			log("No gear sound for kind '" .. (gear_sound_kind or "(None)") .. "'.")
+		end
+	end
 
 	-- Material Sound
 
@@ -125,13 +153,13 @@ function on_movement(material_id, power, hud_view, flags)
 	end
 
 	local material_sound_index = tick_sound_index(material)
-	play_sound(actor, material, material_sound_index)
+	play_step_sound(actor, material, material_sound_index)
 
 	log("Playing natural movement sound for material '" ..
 		material .. "' (id '" .. material_id .. "'), index " .. material_sound_index .. ".")
 end
 
--- Materials
+-- Data
 
 function sound_material_from_id(material_id)
 	for key, value in pairs(MATERIAL_MAP) do
@@ -141,6 +169,29 @@ function sound_material_from_id(material_id)
 	end
 
 	return SOUND_KIND.NONE
+end
+
+function sound_kind_for_active_gear()
+	local kind = active_actor_gear_kind()
+
+	if kind == nil then
+		return nil
+	end
+
+	return GEAR_MAP[kind]
+end
+
+function active_actor_gear_kind()
+	local item = db.actor:active_item()
+
+	if item == nil then
+		return nil
+	end
+
+	local item_sec = item:section();
+	local kind = SYS_GetParam(0, item_sec, "kind", "")
+
+	return kind
 end
 
 -- Actor State
@@ -155,25 +206,41 @@ end
 
 -- Sound Playback
 
-function play_sound(actor, kind, index)
+function play_step_sound(actor, kind, index)
 	local sound_path = "material\\actor\\step\\" .. kind .. "_a_" .. index
+	local volume = sound_volume()
 
+	play_sound(actor, sound_path, volume)
+
+	last_step_sound = time_global()
+end
+
+function play_gear_sound(actor, kind, index)
+	local sound_path = "material\\actor\\gear\\" .. kind .. "_" .. index
+	local volume = sound_volume() * config.movement_gear_volume_coeff
+
+	if actor_is_sprinting() then
+		volume = volume * config.movement_gear_sprinting_volume_coeff
+	end
+
+	play_sound(actor, sound_path, volume)
+end
+
+function play_sound(actor, sound_path, volume)
 	local sound_ref = get_sound_ref(sound_path)
 	sound_ref:play(actor, 0, sound_object.s2d)
 
-	sound_ref.volume = sound_volume()
+	sound_ref.volume = volume
 	sound_ref.frequency = sound_frequency()
-
-	last_movement_sound = time_global()
 end
 
 function sound_volume()
 	local jitter = random_float(-config.movement_volume_jitter, config.movement_volume_jitter)
 	local volume = config.movement_volume + jitter
 
-	if actor_is_crouching then
+	if actor_is_crouching() then
 		volume = volume * config.movement_crouching_volume_coeff
-	elseif actor_is_sprinting then
+	elseif actor_is_sprinting() then
 		volume = volume * config.movement_sprinting_volume_coeff
 	end
 
