@@ -6,6 +6,13 @@ local SOUND_KIND = {
 	GRASS = "grass"
 }
 
+local GEAR_SOUND_KIND = {
+	MELEE = "melee",
+	LIGHT = "weapon_light",
+	MEDIUM = "weapon_medium",
+	HEAVY = "weapon_heavy"
+}
+
 local MATERIAL_MAP = {
 	["wood"] = SOUND_KIND.NONE,
 	["earth"] = SOUND_KIND.GRASS,
@@ -20,7 +27,20 @@ local MATERIAL_MAP = {
 	["tile"] = SOUND_KIND.NONE,
 	["concrete"] = SOUND_KIND.NONE,
 	["shifer"] = SOUND_KIND.NONE,
-	["default"] = SOUND_KIND.NONE,
+	["default"] = SOUND_KIND.NONE
+}
+
+local GEAR_MAP = {
+	["w_melee"] = GEAR_SOUND_KIND.MELEE,
+	["w_pistol"] = GEAR_SOUND_KIND.LIGHT,
+	["w_shotgun"] = GEAR_SOUND_KIND.MEDIUM,
+	["w_smg"] = GEAR_SOUND_KIND.MEDIUM,
+	["w_rifle"] = GEAR_SOUND_KIND.MEDIUM,
+	["w_sniper"] = GEAR_SOUND_KIND.HEAVY,
+	["w_explosive"] = GEAR_SOUND_KIND.MELEE,
+	["w_misc"] = GEAR_SOUND_KIND.LIGHT,
+	["w_base"] = GEAR_SOUND_KIND.LIGHT,
+	["i_device"] = GEAR_SOUND_KIND.LIGHT
 }
 
 -- Config
